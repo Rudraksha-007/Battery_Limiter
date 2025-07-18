@@ -1,11 +1,12 @@
-#🔋 Battery Limiter
+**🔋 Battery Limiter**
 A lightweight, simple, and modern Windows utility to help you extend your laptop's battery lifespan by reminding you to unplug it when it reaches a custom charge limit.
 
 
 Why Use Battery Limiter?
-Keeping your laptop battery charged between 20% and 80% can significantly increase its overall lifespan. This app runs quietly in your system tray, monitors your battery level, and notifies you to unplug the charger when it hits the limit you've set, preventing unnecessary overcharging.
+Keeping your laptop battery charged between 20% and 80% can significantly increase its overall lifespan. 
+This app runs quietly in your system tray, monitors your battery level, and notifies you to unplug the charger when it hits the limit you've set, preventing unnecessary overcharging.
 
-#✨ Key Features
+**✨ Key Features**
 Custom Charge Limit: Set any charge percentage (e.g., 80%, 85%) as your target.
 
 System Tray Icon: Runs silently in the background and is accessible via a clean system tray icon.
@@ -14,7 +15,7 @@ Start with Windows: Conveniently set the app to launch automatically when you lo
 Modern UI: A simple, clean settings window with a dark theme, built with sv-ttk.
 Lightweight: Uses minimal system resources.
 
-#⬇️ Installation & Usage
+**⬇️ Installation & Usage**
 Go to the Releases page of this repository.
 
 Download the BatteryLimiter.exe file from the latest release.
@@ -26,7 +27,7 @@ Click "Set and Hide".
 
 The app will now run in your system tray. You can right-click the tray icon at any time to open the settings or quit the application.
 
-#🛠️ Building From Source
+**🛠️ Building From Source**
 If you want to modify the code or build it yourself, follow these steps.
 
 Prerequisites:
@@ -71,18 +72,14 @@ i believe every laptop regardless of the manufactorer needs a method to sustain 
 if you are reading this note that most of the readme file was made by LLM/AI because college doesnt gimme much time 
 i hope the best for you and a star to this repo would be lovely my aim's to make life easier prolly, idk bye ^_____^
 
-#📜 License
+**📜 License**
 As of now none... not that big of a app yo!
 
-#🙌 Acknowledgements
+**🙌 Acknowledgements**
 This application was made possible by these fantastic open-source libraries:
 
 psutil for battery information.
-
 pystray for the system tray icon.
-
 sv-ttk for the beautiful modern theme.
-
 Pillow for image handling.
-
 win10toast-reborn for Windows notifications.
