@@ -11,14 +11,37 @@ from PIL import Image
 import sys
 import os
 import winreg # --- NEW --- Import for registry access
+import winsdk.windows.ui.notifications as notifications
+import winsdk.windows.data.xml.dom as dom
+import time
+import os, sys, winshell
+from win32com.client import Dispatch
+
+xml_doc = dom.XmlDocument()
+
+
+# APP_ID = "Chargee"
+
+# shortcut_path = os.path.join(winshell.start_menu(), "Chargee.lnk")
+# target = sys.executable   # path to python.exe
+# arguments = os.path.abspath(__file__)  # your script
+# icon = target
+
+# shell = Dispatch("WScript.Shell")
+# shortcut = shell.CreateShortCut(shortcut_path)
+# shortcut.Targetpath = target
+# shortcut.Arguments = arguments
+# shortcut.IconLocation = icon
+# shortcut.save()
 
 # --- Helper Function for PyInstaller ---
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller. """
     try:
-        base_path = os.path.join(sys._MEIPASS, 'assets') # type: ignore
-    except Exception:
-        base_path = os.path.join(os.path.abspath("."), 'assets')
+        base_path = sys._MEIPASS  # type: ignore # folder created by PyInstaller
+    except AttributeError:
+        base_path = os.path.dirname(__file__)  # script directory in dev
+
     return os.path.join(base_path, relative_path)
 
 # --- NEW --- Registry Management Functions ---
@@ -79,7 +102,8 @@ def toggle_startup(variable):
 
 # --- Global Settings & Shared Data ---
 app_settings = {
-    "charge_limit": 80
+    "charge_limit": 80,
+    "min_charge_limit": 20  # <-- NEW: Default minimum charge limit
 }
 
 # --- Backend Battery Logic ---
@@ -97,12 +121,16 @@ class BatMonitor():
 
 def monitor_charge(icon):
     notified = False
+    min_notified = False  # <-- NEW: Track min notification
     toaster = ToastNotifier()
     toast_icon_path = None
     try:
         toast_icon_path = resource_path("toast.ico")
+        if not os.path.exists(toast_icon_path):
+            toast_icon_path = None  # Use None if icon is missing
     except Exception as e:
         print(f"Could not find toast icon. Error: {e}")
+        toast_icon_path = None
 
     while not icon.visible:
         time.sleep(1)
@@ -111,26 +139,70 @@ def monitor_charge(icon):
         try:
             battery = psutil.sensors_battery()
             device = BatMonitor(battery, app_settings["charge_limit"])
+            min_limit = app_settings["min_charge_limit"]  # <-- NEW
 
+            # --- Max limit logic (existing) ---
             if device.is_plugged_in():
                 if device.limit_reached() and not notified:
                     print(f"Limit of {device.limit}% reached. Notifying user.")
-                    toaster.show_toast(
-                        "⚡ Charging Alert!",
-                        f"Battery is at {device.percentage}%. Please unplug your charger.",
-                        duration=10,
-                        threaded=True,
-                        icon_path=toast_icon_path
-                    )
+                    toast_xml_str = """
+                        <toast>
+                        <visual>
+                            <binding template="ToastGeneric">
+                            <text>⚡ Charging Alert! </text>
+                            <text>Please unplug your charger🔋</text>
+                            </binding>
+                        </visual>
+                        </toast>
+                    """
+                    xml_doc.load_xml(toast_xml_str)
+                    notifier = notifications.ToastNotificationManager.create_toast_notifier("Python")
+                    notification = notifications.ToastNotification(xml_doc)
+                    notifier.show(notification) # type: ignore
                     winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
                     notified = True
+
+                    # toaster.show_toast(
+                    #     "⚡ Charging Alert!",
+                    #     f"Battery is at {device.percentage}%. Please unplug your charger.",
+                    #     duration=10,
+                    #     threaded=True,
+                    #     icon_path=toast_icon_path
+                    # )
                 elif not device.limit_reached() and notified:
                     notified = False
             else:
                 if notified:
                     notified = False
-            
-            time.sleep(30)
+
+            # --- Min limit logic ---
+            if not device.is_plugged_in():
+                if device.percentage <= min_limit and not min_notified:
+                    print(f"Minimum limit of {min_limit}% reached. Notifying user to charge.")
+                    toast_xml_str = """
+                        <toast>
+                        <visual>
+                            <binding template="ToastGeneric">
+                            <text>⚡ Charging Alert! </text>
+                            <text>Please plug in your charger🪫</text>
+                            </binding>
+                        </visual>
+                        </toast>
+                    """
+                    xml_doc.load_xml(toast_xml_str)
+                    notifier = notifications.ToastNotificationManager.create_toast_notifier("Python")
+                    notification = notifications.ToastNotification(xml_doc)
+                    notifier.show(notification) # type: ignore
+                    winsound.PlaySound("SystemExclamation", winsound.SND_ALIAS)
+                    min_notified = True
+                elif device.percentage > min_limit and min_notified:
+                    min_notified = False
+            else:
+                if min_notified:
+                    min_notified = False
+            # --- END NEW ---
+
+            time.sleep(10)
         except Exception as e:
             print(f"An error occurred in monitor thread: {e}")
             time.sleep(60)
@@ -139,17 +211,26 @@ def monitor_charge(icon):
 def set_charge_limit():
     try:
         limit_str = limit_entry.get()
-        if limit_str and limit_str.isdigit():
+        min_limit_str = min_limit_entry.get()  # <-- NEW
+        if limit_str and limit_str.isdigit() and min_limit_str and min_limit_str.isdigit():
             limit_val = int(limit_str)
-            if 0 < limit_val <= 100:
+            min_limit_val = int(min_limit_str)
+            if 0 < min_limit_val < limit_val <= 100:
                 app_settings["charge_limit"] = limit_val
-                print(f"Charge limit set to: {limit_val}%")
-                status_label.config(text=f"Limit set to {limit_val}%.", foreground="green")
+                app_settings["min_charge_limit"] = min_limit_val  # <-- NEW
+                print(f"Charge limits set to: Max {limit_val}%, Min {min_limit_val}%")
+                status_label.config(
+                    text=f"Limits set: Max {limit_val}%, Min {min_limit_val}%.",
+                    foreground="green"
+                )
                 root.withdraw() # Hide window after setting
             else:
-                status_label.config(text="Enter a value between 1-100.", foreground="orange")
+                status_label.config(
+                    text="Min must be < Max, both 1-100.",
+                    foreground="orange"
+                )
         else:
-            status_label.config(text="Please enter a valid number.", foreground="red")
+            status_label.config(text="Please enter valid numbers.", foreground="red")
     except Exception as e:
         print(f"An error occurred in set_charge_limit: {e}")
         status_label.config(text="An error occurred.", foreground="red")
@@ -192,7 +273,7 @@ def setup_tray_icon():
 root = tk.Tk()
 root.title("Battery Monitor Settings")
 root.geometry("400x250") # Increased height for new checkbox
-root.resizable(False, False)
+root.resizable(True, True)
 sv_ttk.set_theme("dark")
 
 main_frame = ttk.Frame(root, padding=20)
@@ -204,6 +285,15 @@ prompt_label.pack(pady=(0, 10))
 limit_entry = ttk.Entry(main_frame, width=10, font=("Segoe UI", 11), justify='center')
 limit_entry.pack(pady=5)
 limit_entry.insert(0, str(app_settings["charge_limit"]))
+
+# --- NEW: Minimum Charge Limit Field ---
+min_prompt_label = ttk.Label(main_frame, text="Set Min Charge Limit (%)", font=("Segoe UI", 12))
+min_prompt_label.pack(pady=(10, 0))
+
+min_limit_entry = ttk.Entry(main_frame, width=10, font=("Segoe UI", 11), justify='center')
+min_limit_entry.pack(pady=5)
+min_limit_entry.insert(0, str(app_settings["min_charge_limit"]))
+# --- END NEW ---
 
 set_button = ttk.Button(main_frame, text="Set and Hide", command=set_charge_limit, style="Accent.TButton")
 set_button.pack(pady=10)
